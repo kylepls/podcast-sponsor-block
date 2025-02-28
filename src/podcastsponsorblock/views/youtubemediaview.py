@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 import time
 from collections import defaultdict
@@ -20,18 +21,30 @@ def download_m4a_audio(
 ):
     logging.info(f"Preparing to download audio for video ID: {video_id}")
     youtube_dlp_options = {
+        'extract_flat': 'discard_in_playlist',
+        "format": "bestaudio[ext=m4a]",
+        'fragment_retries': 10,
         "quiet": False,
         "outtmpl": str(output_path.absolute().resolve()),
-        "format": "bestaudio[ext=m4a]",
         "postprocessors": [
             {
-                "key": "SponsorBlock",
-                "categories": categories_to_remove
+                'api': os.environ.get("PODCAST_SPONSORBLOCK_API", "https://sponsor.ajay.app"),
+                'categories': categories_to_remove,
+                'key': 'SponsorBlock',
+                'when': 'after_filter'
             },
             {
-                "key": "ModifyChapters",
-                "remove_sponsor_segments": categories_to_remove,
-            },
+                'force_keyframes': False,
+                'key': 'ModifyChapters',
+                'remove_chapters_patterns': [],
+                'remove_ranges': [],
+                'remove_sponsor_segments': categories_to_remove,
+                'sponsorblock_chapter_title': '[SponsorBlock]: %(category_names)l'},
+            {
+                'key': 'FFmpegConcat',
+                'only_multi_video': True,
+                'when': 'playlist'
+            }
         ],
     }
     logging.debug(f"YoutubeDL options: {youtube_dlp_options}")
