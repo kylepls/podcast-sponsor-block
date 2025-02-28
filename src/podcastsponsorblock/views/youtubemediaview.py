@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Sequence, Optional
@@ -19,8 +20,9 @@ from ..models import ServiceConfig
 def download_m4a_audio(
     video_id: str, output_path: Path, categories_to_remove: Sequence[str]
 ):
+    logging.info(f"Preparing to download audio for video ID: {video_id}")
     youtube_dlp_options = {
-        "quiet": True,
+        "quiet": False,
         "outtmpl": str(output_path.absolute().resolve()),
         "format": "bestaudio[ext=m4a]",
         "postprocessors": [
@@ -31,20 +33,34 @@ def download_m4a_audio(
             },
         ],
     }
+    logging.debug(f"YoutubeDL options: {youtube_dlp_options}")
     with YoutubeDLP(youtube_dlp_options) as youtube_dlp_client:
-        youtube_dlp_client.download((f"https://www.youtube.com/watch?v={video_id}",))
+        logging.info(f"Starting download for video ID: {video_id}")
+        try:
+            youtube_dlp_client.download((f"https://www.youtube.com/watch?v={video_id}",))
+            logging.info(f"Successfully completed download for video ID: {video_id}")
+        except Exception as e:
+            logging.error(f"Error occurred while downloading video ID {video_id}: {e}")
+            raise
 
 
 def validate_youtube_video_id(video_id: str, config: ServiceConfig) -> Optional[str]:
+    logging.info(f"Validating YouTube video ID: {video_id}")
     youtube_client = build_google_api_client(
         "youtube", "v3", developerKey=config.youtube_api_key, cache_discovery=False
     )
     video_request = youtube_client.videos().list(part="id", id=video_id)
-    video_response = video_request.execute()
-    video_objects = video_response["items"]
-    if len(video_objects) == 0:
+    try:
+        video_response = video_request.execute()
+        video_objects = video_response["items"]
+        if len(video_objects) == 0:
+            logging.warning(f"No video found for ID: {video_id}")
+            return None
+        logging.info(f"Video ID {video_id} is valid.")
+        return video_objects[0]["id"]
+    except Exception as e:
+        logging.error(f"Error occurred while validating video ID {video_id}: {e}")
         return None
-    return video_objects[0]["id"]
 
 
 class YoutubeMediaView(MethodView):
@@ -74,6 +90,7 @@ class YoutubeMediaView(MethodView):
                     audio_output_path,
                     categories_to_remove=config.categories_to_remove,
                 )
+                time.sleep(3)
                 return send_file(audio_output_path)
             except DownloadError as exception:
                 logging.exception(

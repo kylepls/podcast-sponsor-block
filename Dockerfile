@@ -19,11 +19,12 @@ COPY src ${app_dir}
 WORKDIR ${app_dir}
 CMD [ \
     "gunicorn", \
-    "--log-level=info", \
+    "--log-level=debug", \
     "--logger-class=podcastsponsorblock.AuthKeyFilteringLogger", \
-    "--workers=5", \
+    "--workers=1", \
     "--log-file=-", \
     "--access-logfile=-", \
+    "--timeout=90000", \
     "-b=0.0.0.0:8080", \
     "podcastsponsorblock:create_app()" \
 ]
