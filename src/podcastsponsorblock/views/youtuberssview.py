@@ -90,8 +90,6 @@ def has_sponsor_block(episode: EpisodeDetails) -> bool:
 
     value = False
     if response.status_code == 200:
-        data = response.json()
-        value = len(data.get("segments", [])) > 0  # Check if there are any segments
         logging.info("Found SponsorBlock segments")
 
     logging.debug(f"SponsorBlock segments found for {episode.id} = {value}")
