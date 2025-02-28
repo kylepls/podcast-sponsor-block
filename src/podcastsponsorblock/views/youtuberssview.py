@@ -81,8 +81,7 @@ def has_sponsor_block(episode: EpisodeDetails) -> bool:
         logging.debug(f"Episode {episode.id} is older than 1 day, skipping SponsorBlock check (implicitly true)")
         return True
 
-    api = os.environ.get("PODCAST_SPONSORBLOCK_API", "https://sponsor.ajay.app"),
-    api_url = f"${api}/api/skipSegments"
+    api_url = "https://sponsor.ajay.app/api/skipSegments" # TODO environ
     params = {
         "videoID": episode.id,
     }
