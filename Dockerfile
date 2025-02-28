@@ -19,7 +19,7 @@ COPY src ${app_dir}
 WORKDIR ${app_dir}
 CMD [ \
     "gunicorn", \
-    "--log-level=debug", \
+    "--log-level=${LOG_LEVEL:-debug}", \
     "--logger-class=podcastsponsorblock.AuthKeyFilteringLogger", \
     "--workers=1", \
     "--log-file=-", \

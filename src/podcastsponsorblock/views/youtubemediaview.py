@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -6,19 +7,16 @@ from typing import Sequence, Optional
 
 from flask import send_file, current_app, Response
 from flask.typing import ResponseReturnValue
-
 from flask.views import MethodView
+from googleapiclient.discovery import build as build_google_api_client
 from yt_dlp import YoutubeDL as YoutubeDLP, DownloadError
 
 from ..helpers import leniently_validate_youtube_id
-from googleapiclient.discovery import build as build_google_api_client
-import threading
-
 from ..models import ServiceConfig
 
 
 def download_m4a_audio(
-    video_id: str, output_path: Path, categories_to_remove: Sequence[str]
+        video_id: str, output_path: Path, categories_to_remove: Sequence[str]
 ):
     logging.info(f"Preparing to download audio for video ID: {video_id}")
     youtube_dlp_options = {
@@ -26,7 +24,10 @@ def download_m4a_audio(
         "outtmpl": str(output_path.absolute().resolve()),
         "format": "bestaudio[ext=m4a]",
         "postprocessors": [
-            {"key": "SponsorBlock", "categories": categories_to_remove},
+            {
+                "key": "SponsorBlock",
+                "categories": categories_to_remove
+            },
             {
                 "key": "ModifyChapters",
                 "remove_sponsor_segments": categories_to_remove,

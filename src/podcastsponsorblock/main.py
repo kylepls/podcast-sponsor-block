@@ -119,8 +119,10 @@ def log_service_config(config: ServiceConfig) -> None:
 
 
 def create_app() -> Flask:
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+        level=getattr(logging, log_level, logging.DEBUG),
+        format="%(asctime)s [%(levelname)s] %(message)s"
     )
     logging.info("Creating app")
     app = Flask(__name__)
