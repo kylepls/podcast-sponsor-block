@@ -1,20 +1,22 @@
 import logging
-from dataclasses import dataclass
-from urllib.parse import urlparse, urlencode
+import os
+import time
 from datetime import timedelta
 from typing import TypedDict, Optional
+from urllib.parse import urlparse, urlencode
 
+import requests
 from cachetools import cached, TTLCache
 from cachetools.keys import hashkey
 from feedgen.entry import FeedEntry
 from feedgen.feed import FeedGenerator
-from flask.typing import ResponseReturnValue
 from flask import (
     Response,
     current_app,
     url_for,
     request,
 )
+from flask.typing import ResponseReturnValue
 from flask.views import MethodView
 
 from ..helpers import (
@@ -63,8 +65,42 @@ def add_host(url: str, generator_options: FeedOptions) -> str:
 def is_valid_description(description: Optional[str]) -> bool:
     return description is not None and description != "" and not description.isspace()
 
+
+def has_sponsor_block(episode: EpisodeDetails) -> bool:
+    logging.debug(f"Checking sponsor block for {episode.id}")
+
+    config: ServiceConfig = current_app.config["PODCAST_SERVICE_CONFIG"]
+
+    audio_output_path = config.data_path / "audio" / f"{episode.id}.m4a"
+    logging.debug(f"Checking for audio file at {audio_output_path}")
+    if audio_output_path.exists() and audio_output_path.is_file():
+        logging.debug(f"Found cached download at {audio_output_path}, skipping SponsorBlock check (implicitly true)")
+        return True
+
+    if (time.time() - episode.published_at.timestamp()) > 86400:  # 86400 seconds in a day
+        logging.debug(f"Episode {episode.id} is older than 1 day, skipping SponsorBlock check (implicitly true)")
+        return True
+
+    api = os.environ.get("PODCAST_SPONSORBLOCK_API", "https://sponsor.ajay.app"),
+    api_url = f"${api}/api/skipSegments"
+    params = {
+        "videoID": episode.id,
+    }
+    logging.debug(f"Performing SponsorBlock check at {api_url}, {params}")
+    response = requests.get(api_url, params=params)
+
+    value = False
+    if response.status_code == 200:
+        data = response.json()
+        value = len(data.get("segments", [])) > 0  # Check if there are any segments
+        logging.info("Found SponsorBlock segments")
+
+    logging.debug(f"SponsorBlock segments found for {episode.id} = {value}")
+    return value
+
+
 def generate_episode_entry(
-    episode: EpisodeDetails, generator_options: FeedOptions
+        episode: EpisodeDetails, generator_options: FeedOptions
 ) -> FeedEntry:
     feed_entry = FeedEntry()
     feed_entry.id(episode.id)
@@ -106,7 +142,7 @@ def generate_episode_entry(
 
 
 def populate_feed_generator(
-    playlist_episode_feed: YoutubePlaylistEpisodeFeed, generator_options: FeedOptions
+        playlist_episode_feed: YoutubePlaylistEpisodeFeed, generator_options: FeedOptions
 ) -> FeedGenerator:
     playlist_details = playlist_episode_feed.playlist_details
     feed_generator = FeedGenerator()
@@ -164,14 +200,17 @@ def populate_feed_generator(
     ),
 )
 def generate_rss_feed(
-    episode_feed: YoutubePlaylistEpisodeFeed, generator_options: FeedOptions
+        episode_feed: YoutubePlaylistEpisodeFeed, generator_options: FeedOptions
 ) -> str:
     logging.info(
         f"Generating RSS feed for YouTube playlist {episode_feed.playlist_details.id}"
     )
     feed_generator = populate_feed_generator(episode_feed, generator_options)
     for episode in episode_feed:
-        feed_generator.add_entry(generate_episode_entry(episode, generator_options))
+        if has_sponsor_block(episode):
+            feed_generator.add_entry(generate_episode_entry(episode, generator_options))
+        else:
+            logging.debug(f"Excluding {episode.id} from feed, no SponsorBlock segments found")
     return feed_generator.rss_str()
 
 
